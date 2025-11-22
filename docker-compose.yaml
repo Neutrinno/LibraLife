@@ -1,0 +1,53 @@
+services:
+
+  database:
+    image: postgres:15
+    container_name: main-database
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_main_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: always
+    ports:
+      - "8079:8079"
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+    command: >
+      sh -c "sleep 10 &&
+             cd backend && alembic upgrade head || echo 'No migrations to apply' && cd .. &&
+             uvicorn backend.app.main:app --host 0.0.0.0 --port 8079"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_main_data:
