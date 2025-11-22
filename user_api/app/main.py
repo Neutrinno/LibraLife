@@ -7,6 +7,7 @@ import uuid
 from app.auth.auth import auth_backend
 from app.auth.manager import get_user_manager
 from app.auth.database import User
+from app.event_records.routers import event_registration_router
 from app.users.router import user_router
 from app.events.routers import event_router
 
@@ -37,4 +38,5 @@ app = FastAPI(title='LibraLife')
 
 app.include_router(user_router)
 app.include_router(event_router)
+app.include_router(event_registration_router)
 

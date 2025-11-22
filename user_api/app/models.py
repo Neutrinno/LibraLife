@@ -47,25 +47,6 @@ class Book(Base):
     def __repr__(self):
         return f"<Book(id={self.id}, title='{self.title}')>"
 
-
-class Event(Base):
-    """Модель мероприятия"""
-    __tablename__ = 'events'
-
-    id = Column(Integer, primary_key=True, autoincrement=True, comment='Уникальный ID')
-    title = Column(String(200), nullable=False, comment='Название')
-    description = Column(Text, comment='Описание')
-    date = Column(String(100), nullable=False, comment='Дата')
-    location = Column(String(200), comment='Локация')
-    participants_count = Column(Integer, default=0, comment='Количество участников')
-
-    # Связи
-    reviews = relationship("Review", back_populates="event")
-
-    def __repr__(self):
-        return f"<Event(id={self.id}, title='{self.title}')>"
-
-
 class Review(Base):
     """Модель отзыва"""
     __tablename__ = 'reviews'
@@ -85,5 +66,38 @@ class Review(Base):
     book = relationship("Book", back_populates="reviews")
     event = relationship("Event", back_populates="reviews")
 
+
+class EventRecord(Base):
+    __tablename__ = 'event_records'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, unique=True, nullable=False,
+                comment='Уникальный ID записи')
+    event_id = Column(UUID(as_uuid=True), ForeignKey('events.id', ondelete='CASCADE'), nullable=False,
+                      comment='ID мероприятия')
+    name = Column(String(100), nullable=False, comment='Имя участника')
+    surname = Column(String(100), nullable=False, comment='Фамилия участника')
+    email = Column(String(100), nullable=False, comment='Email участника')
+    registered_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False,
+                           comment='Дата и время регистрации')
+
+    event = relationship("Event", back_populates="registrations")
+
     def __repr__(self):
-        return f"<Review(id={self.id}, type={self.review_type}, rating={self.rating})>"
+        return f"<EventRecord(id={self.id}, name='{self.name} {self.surname}', email='{self.email}')>"
+
+
+class Event(Base):
+    __tablename__ = 'events'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, comment='Уникальный ID')
+    title = Column(String(200), nullable=False, comment='Название')
+    description = Column(Text, comment='Описание')
+    date = Column(DateTime, nullable=False, comment='Дата')
+    location = Column(String(200), comment='Локация')
+    participants_count = Column(Integer, default=0, comment='Количество участников')
+    max_participants = Column(Integer, nullable=True, comment='Максимальное количество участников')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment='Дата создания')
+
+    reviews = relationship("Review", back_populates="event")
+    registrations = relationship("EventRecord", back_populates="event", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Event(id={self.id}, title='{self.title}')>"
