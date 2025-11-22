@@ -4,12 +4,11 @@ from fastapi_users import FastAPIUsers
 import logging
 import uuid
 
-from app.auth.shemas import UserReadExtended, UserCreateExtended
-from app.settings import settings
 from app.auth.auth import auth_backend
 from app.auth.manager import get_user_manager
 from app.auth.database import User
-
+from app.users.router import user_router
+from app.events.routers import event_router
 
 # Настройка логирования
 logging.basicConfig(
@@ -36,6 +35,6 @@ app = FastAPI(title='LibraLife')
 #     allow_headers=["*"],
 # )
 
-app.
-
+app.include_router(user_router)
+app.include_router(event_router)
 

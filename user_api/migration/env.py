@@ -3,15 +3,17 @@ import os
 import sys
 from logging.config import fileConfig
 
-# Добавляем /app в sys.path для импорта user_api модулей (ДО импорта user_api)
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+# Добавляем /app в sys.path для импорта модулей (ДО импорта app)
+# В Docker контейнере migration/env.py находится в /app/migration/env.py
+# Поэтому нужно подняться на один уровень вверх, чтобы попасть в /app
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import pool
 from alembic import context
 
-from user_api.app.models import Base
-from user_api.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
+from app.models import Base
+from config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
 #sys.path.append(os.path.join(sys.path[0], 'user_api/app'))
 # this is the Alembic Config object, which provides

@@ -23,7 +23,7 @@ services:
 
   backend:
     build:
-      context: user_api
+      context: ./user_api    # ваш текущий context
       dockerfile: Dockerfile
     container_name: user_api
     restart: always
@@ -40,8 +40,8 @@ services:
       - DB_PASS=${DB_PASS}
     command: >
       sh -c "sleep 10 &&
-             cd backend && alembic upgrade head || echo 'No migrations to apply' && cd .. &&
-             uvicorn backend.app.main:app --host 0.0.0.0 --port 8079"
+             alembic upgrade head || echo 'No migrations to apply' &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8079"
     networks:
       - app-network
 

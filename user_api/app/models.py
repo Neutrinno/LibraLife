@@ -55,7 +55,7 @@ class Event(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, comment='Уникальный ID')
     title = Column(String(200), nullable=False, comment='Название')
     description = Column(Text, comment='Описание')
-    date = Column(DateTime, nullable=False, comment='Дата')
+    date = Column(String(100), nullable=False, comment='Дата')
     location = Column(String(200), comment='Локация')
     participants_count = Column(Integer, default=0, comment='Количество участников')
 

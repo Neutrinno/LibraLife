@@ -2,13 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# PYTHONPATH указывает на /app, где окажется ваша папка app/
 ENV PYTHONPATH=/app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY . ./backend/
+# Копируем контекст (в compose context=user_api) прямо в /app
+COPY . /app
 
 EXPOSE 8079
 
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8079"]
+# По-умолчанию запускаем uvicorn (compose переопределит команду для миграций)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8079"]

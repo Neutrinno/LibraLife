@@ -4,9 +4,9 @@ from sqlalchemy.exc import IntegrityError
 import uuid
 from typing import Optional, List
 
-from models import User
-from security import get_password_hash
-from schemas import UserCreate, UserUpdate
+from app.models import User
+from app.security import get_password_hash
+from app.users.schemas import UserCreate, UserUpdate
 
 
 class UserCRUD:
