@@ -77,7 +77,180 @@ async def add_synonym_query(session: AsyncSession, word: str, synonym: str) -> b
         return False
 
 
-# ============= SERVICES =============
+# ============= BOOKS =============
+async def get_book_by_id(session: AsyncSession, book_id: int) -> Optional[Dict[str, Any]]:
+    """Получение книги по ID для индексации."""
+    try:
+        result = await session.execute(
+            text("""
+                SELECT 
+                    id,
+                    author,
+                    title,
+                    category,
+                    gost_title,
+                    description,
+                    is_available
+                FROM books 
+                WHERE id = :book_id
+            """),
+            {"book_id": book_id}
+        )
+        row = result.fetchone()
+
+        if row:
+            book_dict = {
+                'id': row[0],
+                'author': row[1],
+                'title': row[2],
+                'category': row[3],
+                'gost_title': row[4],
+                'description': row[5],
+                'is_available': row[6],
+                'item_type': 'book'
+            }
+            return book_dict
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Error fetching book {book_id}: {e}", exc_info=True)
+        return None
+
+
+async def get_all_books(session: AsyncSession, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
+    """
+    Получение всех доступных книг для массовой индексации.
+    """
+    try:
+        result = await session.execute(
+            text("""
+                SELECT 
+                    id,
+                    author,
+                    title,
+                    category,
+                    gost_title,
+                    description,
+                    is_available
+                FROM books
+                WHERE is_available = TRUE
+                ORDER BY id ASC
+                LIMIT :limit OFFSET :offset
+            """),
+            {"limit": limit, "offset": offset}
+        )
+        rows = result.fetchall()
+
+        books = []
+        for row in rows:
+            book_dict = {
+                'id': row[0],
+                'author': row[1],
+                'title': row[2],
+                'category': row[3],
+                'gost_title': row[4],
+                'description': row[5],
+                'is_available': row[6],
+                'item_type': 'book'
+            }
+            books.append(book_dict)
+
+        return books
+
+    except Exception as e:
+        logger.error(f"Error fetching books: {e}", exc_info=True)
+        return []
+
+
+# ============= EVENTS =============
+async def get_event_by_id(session: AsyncSession, event_id: int) -> Optional[Dict[str, Any]]:
+    """Получение мероприятия по ID для индексации."""
+    try:
+        result = await session.execute(
+            text("""
+                SELECT 
+                    id,
+                    title,
+                    description,
+                    date,
+                    location,
+                    participants_count
+                FROM events 
+                WHERE id = :event_id
+            """),
+            {"event_id": event_id}
+        )
+        row = result.fetchone()
+
+        if row:
+            event_dict = {
+                'id': row[0],
+                'title': row[1],
+                'description': row[2],
+                'date': row[3],
+                'location': row[4],
+                'participants_count': row[5],
+                'item_type': 'event'
+            }
+            # Преобразуем datetime в строку для JSON-сериализации
+            if event_dict.get('date') and hasattr(event_dict['date'], 'isoformat'):
+                event_dict['date'] = event_dict['date'].isoformat()
+            return event_dict
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Error fetching event {event_id}: {e}", exc_info=True)
+        return None
+
+
+async def get_all_events(session: AsyncSession, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
+    """
+    Получение всех мероприятий для массовой индексации.
+    """
+    try:
+        result = await session.execute(
+            text("""
+                SELECT 
+                    id,
+                    title,
+                    description,
+                    date,
+                    location,
+                    participants_count
+                FROM events
+                ORDER BY date ASC
+                LIMIT :limit OFFSET :offset
+            """),
+            {"limit": limit, "offset": offset}
+        )
+        rows = result.fetchall()
+
+        events = []
+        for row in rows:
+            event_dict = {
+                'id': row[0],
+                'title': row[1],
+                'description': row[2],
+                'date': row[3],
+                'location': row[4],
+                'participants_count': row[5],
+                'item_type': 'event'
+            }
+            # Преобразуем datetime в строку
+            if event_dict.get('date') and hasattr(event_dict['date'], 'isoformat'):
+                event_dict['date'] = event_dict['date'].isoformat()
+            events.append(event_dict)
+
+        return events
+
+    except Exception as e:
+        logger.error(f"Error fetching events: {e}", exc_info=True)
+        return []
+
+
+# ============= SERVICES (старые функции, оставлены для обратной совместимости) =============
 async def get_service_by_id(session: AsyncSession, service_id: UUID) -> Optional[Dict[str, Any]]:
     """Получение услуги по UUID для индексации."""
     try:
