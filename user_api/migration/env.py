@@ -3,17 +3,17 @@ import os
 import sys
 from logging.config import fileConfig
 
-# Добавляем /app в sys.path для импорта backend модулей (ДО импорта backend)
+# Добавляем /app в sys.path для импорта user_api модулей (ДО импорта user_api)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import pool
 from alembic import context
 
-from backend.app.models import Base
-from backend.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
+from user_api.app.models import Base
+from user_api.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
-#sys.path.append(os.path.join(sys.path[0], 'backend/app'))
+#sys.path.append(os.path.join(sys.path[0], 'user_api/app'))
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

@@ -23,9 +23,9 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: user_api
       dockerfile: Dockerfile
-    container_name: backend
+    container_name: user_api
     restart: always
     ports:
       - "8079:8079"
