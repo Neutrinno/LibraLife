@@ -11,12 +11,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from backend.app.models import Base
-
-DB_USER = os.getenv('DB_USER')
-DB_PASS = os.getenv('DB_PASS')
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT')
-DB_NAME = os.getenv('DB_NAME')
+from backend.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
 #sys.path.append(os.path.join(sys.path[0], 'backend/app'))
 # this is the Alembic Config object, which provides
@@ -24,11 +19,13 @@ DB_NAME = os.getenv('DB_NAME')
 config = context.config
 
 section = config.config_ini_section
-config.set_section_option(section, "DB_USER", str(DB_USER))
-config.set_section_option(section, "DB_PASS", str(DB_PASS))
-config.set_section_option(section, "DB_HOST", str(DB_HOST))
-config.set_section_option(section, "DB_PORT", str(DB_PORT))
-config.set_section_option(section, "DB_NAME", str(DB_NAME))
+# Передаем значения из config.py, где уже загружены переменные из .env
+# Если значение None, передаем пустую строку, чтобы избежать строки 'None' в URL
+config.set_section_option(section, "DB_USER", DB_USER or "")
+config.set_section_option(section, "DB_PASS", DB_PASS or "")
+config.set_section_option(section, "DB_HOST", DB_HOST or "")
+config.set_section_option(section, "DB_PORT", DB_PORT or "")
+config.set_section_option(section, "DB_NAME", DB_NAME or "")
 
 
 # Interpret the config file for Python logging.

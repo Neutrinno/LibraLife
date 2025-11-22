@@ -15,6 +15,5 @@ class User(Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     full_name = Column(String, nullable=True)
-    birth_date = Column(Date, nullable=True)
     registered_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 

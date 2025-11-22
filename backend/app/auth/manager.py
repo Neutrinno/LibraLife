@@ -4,11 +4,11 @@ from typing import Optional
 
 from fastapi import Depends, Request
 from fastapi_users import BaseUserManager, UUIDIDMixin
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.auth.database import get_user_db, get_async_session
-from backend.app.auth.shemas import UserCreateExtended
-from backend.app.models import User
+from app.auth.database import get_user_db, get_async_session, User
+from app.auth.shemas import UserCreateExtended
 
 logger = logging.getLogger(__name__)
 SECRET = "SECRET"
@@ -30,16 +30,13 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 
     async def create(self, user_create: UserCreateExtended, safe: bool = True, **kwargs) -> User:
         """
-        Создает пользователя.
+        Создает пользователя и инициализирует связанные сущности: кошелек, бонусный счет и статус лояльности.
         """
         full_name = user_create.full_name
-        birth_date = user_create.birth_date
-
         user = await super().create(user_create, safe=safe)
 
         update_dict = {
             "full_name": full_name,
-            "birth_date": birth_date
         }
         await self.user_db.update(user, update_dict)
 

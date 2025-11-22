@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime
 from fastapi_users import schemas
 from typing import Optional
 from pydantic import ConfigDict
@@ -28,14 +28,11 @@ class UserCreate(schemas.BaseUserCreate):
 
 class UserCreateExtended(schemas.BaseUserCreate):
     full_name: str
-    birth_date: date
-
 
 class UserReadExtended(schemas.BaseUser[int]):
     id: UUID
     email: str
     full_name: str
-    birth_date: date
     is_active: bool
     is_superuser: bool
     is_verified: bool
