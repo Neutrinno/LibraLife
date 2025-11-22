@@ -3,13 +3,14 @@ from sqlalchemy.orm import declarative_base
 from fastapi_users import FastAPIUsers
 import logging
 import uuid
-
 from app.auth.auth import auth_backend
 from app.auth.manager import get_user_manager
 from app.auth.database import User
 from app.event_records.routers import event_registration_router
 from app.users.router import user_router
 from app.events.routers import event_router
+from app.books.routers import book_router
+from app.book_rental.routers import book_rental_router
 
 # Настройка логирования
 logging.basicConfig(
@@ -39,4 +40,6 @@ app = FastAPI(title='LibraLife')
 app.include_router(user_router)
 app.include_router(event_router)
 app.include_router(event_registration_router)
+app.include_router(book_router)
+app.include_router(book_rental_router)
 

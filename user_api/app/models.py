@@ -24,7 +24,7 @@ class User(Base):
 
     # Связи
     reviews = relationship("Review", back_populates="user")
-
+    rentals = relationship("BookRental", back_populates="user", cascade="all, delete-orphan")
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}')>"
 
@@ -41,9 +41,8 @@ class Book(Base):
     description = Column(Text, comment='Описание')
     is_available = Column(Boolean, default=True, comment='Наличие')
 
-    # Связи
     reviews = relationship("Review", back_populates="book")
-
+    rentals = relationship("BookRental", back_populates="book", cascade="all, delete-orphan")
     def __repr__(self):
         return f"<Book(id={self.id}, title='{self.title}')>"
 
@@ -108,3 +107,29 @@ class EventRecord(Base):
 
     def __repr__(self):
         return f"<EventRecord(id={self.id}, name='{self.name} {self.surname}', email='{self.email}')>"
+
+
+class BookRental(Base):
+    """Модель записи о выдаче книги"""
+    __tablename__ = 'book_rentals'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, comment='Уникальный ID записи о выдаче')
+    book_id = Column(UUID(as_uuid=True), ForeignKey('books.id', ondelete='CASCADE'), nullable=False,
+                     comment='ID книги')
+    user_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete='CASCADE'), nullable=False,
+                     comment='ID пользователя')
+    taken_date = Column(DateTime(timezone=True), server_default=func.now(), nullable=False,
+                        comment='Дата взятия книги')
+    due_date = Column(DateTime(timezone=True), nullable=False, comment='Дата возврата книги')
+    returned_date = Column(DateTime(timezone=True), nullable=True, comment='Фактическая дата возврата')
+    is_returned = Column(Boolean, default=False, nullable=False, comment='Флаг возврата книги')
+    is_extended = Column(Boolean, default=False, nullable=False, comment='Флаг продления срока')
+    extension_count = Column(Integer, default=0, nullable=False, comment='Количество продлений')
+    notes = Column(Text, nullable=True, comment='Примечания')
+
+    # Связи
+    book = relationship("Book", back_populates="rentals")
+    user = relationship("User", back_populates="rentals")
+
+    def __repr__(self):
+        return f"<BookRental(id={self.id}, book_id={self.book_id}, user_id={self.user_id}, is_returned={self.is_returned})>"
