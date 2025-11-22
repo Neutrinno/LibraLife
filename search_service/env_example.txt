@@ -1,0 +1,20 @@
+# Database settings
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=libralife
+DB_USER=postgres
+DB_PASS=password
+
+# Typesense settings
+TYPESENSE_HOST=localhost
+TYPESENSE_PORT=8108
+TYPESENSE_PROTOCOL=http
+TYPESENSE_API_KEY=your-api-key-here
+
+# Service settings
+SERVICE_PORT=8081
+LOG_LEVEL=INFO
+
+# CORS settings (comma-separated origins or * for all)
+ALLOWED_ORIGINS=*
+

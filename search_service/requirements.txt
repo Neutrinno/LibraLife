@@ -1,0 +1,18 @@
+# Web Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# Database
+psycopg2-binary==2.9.9
+
+# Search Engine
+typesense==0.16.0
+
+# Data Validation
+pydantic==2.5.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Date utilities
+python-dateutil

@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: powermarket-postgres
+    environment:
+      POSTGRES_DB: power_market
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./app/database/migrations.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  typesense:
+    image: typesense/typesense:0.25.1
+    container_name: powermarket-typesense
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense-data:/data
+    command: '--data-dir /data --api-key=your-api-key-here --enable-cors'
+    healthcheck:
+      test: [ "CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/8108' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  search-service:
+    build: .
+    container_name: powermarket-search-service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: libralife
+      DB_USER: postgres
+      DB_PASS: password
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_API_KEY: your-api-key-here
+      SERVICE_PORT: 8081
+      LOG_LEVEL: INFO
+      ALLOWED_ORIGINS: "*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      typesense:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  typesense-data:
