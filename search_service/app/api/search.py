@@ -14,15 +14,22 @@ logger = logging.getLogger(__name__)
 
 @router.get("/")
 async def search(
-    q: str = Query(..., min_length=1, max_length=200),
+    q: Optional[str] = Query("*", max_length=200, description="Поисковый запрос. Используйте '*' для получения всех результатов"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     location: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     item_type: Optional[str] = Query(None, description="Фильтр по типу: 'book' или 'event'")
 ):
-    """Поиск книг и мероприятий. По умолчанию ищет в обоих типах одновременно."""
+    """
+    Поиск книг и мероприятий. По умолчанию ищет в обоих типах одновременно.
+    
+    Если q не указан или равен '*', возвращает все результаты с учетом фильтров.
+    """
     try:
+        # Если запрос пустой или не указан, используем '*' для получения всех результатов
+        search_query = q if q and q.strip() and q != "*" else "*"
+        
         filters = {}
         if location:
             filters['location'] = location
@@ -37,16 +44,16 @@ async def search(
             )
 
         results = search_items(
-            query=q,
+            query=search_query,
             page=page,
             per_page=per_page,
             filters=filters if filters else None,
             item_type=item_type
         )
 
-        logger.info(f"Search query: '{q}', item_type: {item_type or 'all'}, found: {results['found']}")
+        logger.info(f"Search query: '{search_query}', item_type: {item_type or 'all'}, found: {results['found']}")
         return {
-            "query": q,
+            "query": q or "*",
             "total": results['found'],
             "results": results['hits'],  # hits содержит document и score
             "page": results['page'],

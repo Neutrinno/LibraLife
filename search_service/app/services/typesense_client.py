@@ -8,7 +8,7 @@ from typing import Dict, Optional
 
 from app.database.queries import get_all_synonyms
 from sqlalchemy.ext.asyncio import AsyncSession
-from typesense.exceptions import ObjectNotFound
+from typesense.exceptions import ObjectNotFound, ServiceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -49,25 +49,69 @@ COLLECTION_SCHEMA = {
 }
 
 
-def init_collection():
+def init_collection(max_retries: int = 10, retry_delay: int = 3):
     """
     Создает коллекцию в Typesense, только если она не существует.
     Это предотвращает потерю данных при перезапуске сервиса.
+    
+    Args:
+        max_retries: Максимальное количество попыток подключения к Typesense
+        retry_delay: Задержка между попытками в секундах
     """
-    try:
-        # Пытаемся получить информацию о коллекции
-        client.collections[COLLECTION_NAME].retrieve()
-        logger.info(f"Collection '{COLLECTION_NAME}' already exists. Skipping creation.")
-    except Exception:
-        # Если получаем ошибку (404 Not Found), значит коллекции нет
-        logger.info(f"Collection '{COLLECTION_NAME}' not found. Creating...")
+    import time
+    
+    for attempt in range(1, max_retries + 1):
         try:
-            # Создаем коллекцию с нашей схемой
-            client.collections.create(COLLECTION_SCHEMA)
-            logger.info(f"Collection '{COLLECTION_NAME}' created successfully.")
-        except Exception as create_error:
-            logger.error(f"Failed to create collection '{COLLECTION_NAME}': {create_error}")
-            raise create_error
+            # Пытаемся получить информацию о коллекции
+            client.collections[COLLECTION_NAME].retrieve()
+            logger.info(f"Collection '{COLLECTION_NAME}' already exists. Skipping creation.")
+            return
+        except ObjectNotFound:
+            # Если получаем ошибку 404, значит коллекции нет - создаем
+            logger.info(f"Collection '{COLLECTION_NAME}' not found. Creating...")
+            try:
+                # Создаем коллекцию с нашей схемой
+                client.collections.create(COLLECTION_SCHEMA)
+                logger.info(f"Collection '{COLLECTION_NAME}' created successfully.")
+                return
+            except ServiceUnavailable as e:
+                if attempt < max_retries:
+                    logger.warning(
+                        f"Typesense not ready yet (attempt {attempt}/{max_retries}). "
+                        f"Retrying in {retry_delay} seconds..."
+                    )
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"Failed to create collection '{COLLECTION_NAME}' after {max_retries} attempts: {e}")
+                    raise
+            except Exception as create_error:
+                logger.error(f"Failed to create collection '{COLLECTION_NAME}': {create_error}")
+                raise
+        except ServiceUnavailable as e:
+            # Typesense еще не готов
+            if attempt < max_retries:
+                logger.warning(
+                    f"Typesense not ready yet (attempt {attempt}/{max_retries}). "
+                    f"Retrying in {retry_delay} seconds..."
+                )
+                time.sleep(retry_delay)
+                continue
+            else:
+                logger.error(f"Typesense unavailable after {max_retries} attempts: {e}")
+                raise
+        except Exception as e:
+            # Другие ошибки - пробуем еще раз, если есть попытки
+            if attempt < max_retries:
+                logger.warning(
+                    f"Error connecting to Typesense (attempt {attempt}/{max_retries}): {e}. "
+                    f"Retrying in {retry_delay} seconds..."
+                )
+                time.sleep(retry_delay)
+                continue
+            else:
+                logger.error(f"Failed to initialize collection after {max_retries} attempts: {e}")
+                raise
 
 
 async def sync_synonyms_with_typesense(session: AsyncSession):
@@ -197,17 +241,28 @@ def search_items(
         item_type: Фильтр по типу ('book', 'event' или None для всех)
     """
     try:
+        # Если запрос '*' или пустой, возвращаем все результаты (без поиска по тексту)
+        is_wildcard = query == '*' or not query.strip()
+        
         # Базовые поля для поиска (общие для книг и мероприятий)
         search_params = {
             'q': query,
-            'query_by': 'title,author,description,gost_title',  # author и gost_title только для книг, но это ок
-            'query_by_weights': '4,3,2,1',
-            'prefix': 'true',
-            'num_typos': 2,
             'per_page': per_page,
             'page': page,
-            'sort_by': '_text_match:desc,date:desc'  # Сначала релевантность, потом дата (для мероприятий)
         }
+        
+        if not is_wildcard:
+            # Параметры поиска по тексту только если это не wildcard запрос
+            search_params.update({
+                'query_by': 'title,author,description,gost_title',  # author и gost_title только для книг, но это ок
+                'query_by_weights': '4,3,2,1',
+                'prefix': 'true',
+                'num_typos': 2,
+                'sort_by': '_text_match:desc,date:desc'  # Сначала релевантность, потом дата (для мероприятий)
+            })
+        else:
+            # Для wildcard запроса сортируем просто по дате или ID
+            search_params['sort_by'] = 'date:desc'
 
         # Построение фильтров
         filter_strings = []

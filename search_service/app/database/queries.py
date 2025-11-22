@@ -118,13 +118,20 @@ async def get_book_by_id(session: AsyncSession, book_id: int) -> Optional[Dict[s
         return None
 
 
-async def get_all_books(session: AsyncSession, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
+async def get_all_books(session: AsyncSession, limit: int = 1000, offset: int = 0, available_only: bool = False) -> List[Dict[str, Any]]:
     """
-    Получение всех доступных книг для массовой индексации.
+    Получение всех книг для массовой индексации.
+    
+    Args:
+        session: AsyncSession с БД
+        limit: Максимальное количество записей
+        offset: Смещение для пагинации
+        available_only: Если True, возвращает только доступные книги
     """
     try:
+        where_clause = "WHERE is_available = TRUE" if available_only else ""
         result = await session.execute(
-            text("""
+            text(f"""
                 SELECT 
                     id,
                     author,
@@ -134,7 +141,7 @@ async def get_all_books(session: AsyncSession, limit: int = 1000, offset: int = 
                     description,
                     is_available
                 FROM books
-                WHERE is_available = TRUE
+                {where_clause}
                 ORDER BY id ASC
                 LIMIT :limit OFFSET :offset
             """),
@@ -144,8 +151,13 @@ async def get_all_books(session: AsyncSession, limit: int = 1000, offset: int = 
 
         books = []
         for row in rows:
+            # Преобразуем UUID в строку, если это UUID
+            book_id = row[0]
+            if hasattr(book_id, '__str__'):
+                book_id = str(book_id)
+            
             book_dict = {
-                'id': row[0],
+                'id': book_id,
                 'author': row[1],
                 'title': row[2],
                 'category': row[3],
@@ -229,8 +241,13 @@ async def get_all_events(session: AsyncSession, limit: int = 1000, offset: int =
 
         events = []
         for row in rows:
+            # Преобразуем UUID в строку, если это UUID
+            event_id = row[0]
+            if hasattr(event_id, '__str__'):
+                event_id = str(event_id)
+            
             event_dict = {
-                'id': row[0],
+                'id': event_id,
                 'title': row[1],
                 'description': row[2],
                 'date': row[3],

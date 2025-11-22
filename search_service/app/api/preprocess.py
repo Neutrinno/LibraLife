@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from pydantic import BaseModel, Field
+from typing import Optional
 from app.api.dependencies import get_db_dependency
 from app.database.queries import get_book_by_id, get_event_by_id
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,6 +121,148 @@ async def delete_item_endpoint(
         raise HTTPException(
             status_code=500,
             detail=str(e)
+        )
+
+
+class ReindexResponse(BaseModel):
+    success: bool
+    books_indexed: int
+    books_failed: int
+    events_indexed: int
+    events_failed: int
+    total_indexed: int
+    total_failed: int
+    message: str
+
+
+@router.post("/reindex-all", response_model=ReindexResponse)
+async def reindex_all_endpoint(
+    db: AsyncSession = Depends(get_db_dependency),
+    batch_size: int = Query(100, ge=1, le=1000, description="Размер батча для обработки")
+):
+    """
+    Полная переиндексация всех книг и мероприятий в Typesense.
+    
+    Получает все данные из PostgreSQL и индексирует их в Typesense батчами.
+    Полезно после массового импорта данных или при необходимости обновить весь индекс.
+    """
+    logger.info(f"=== Starting full reindex with batch_size={batch_size} ===")
+    
+    from app.database.queries import get_all_books, get_all_events
+    from app.services.typesense_client import index_item
+    
+    books_indexed = 0
+    books_failed = 0
+    events_indexed = 0
+    events_failed = 0
+    
+    try:
+        # Индексация книг
+        logger.info("Starting books indexing...")
+        offset = 0
+        while True:
+            books = await get_all_books(db, limit=batch_size, offset=offset, available_only=False)
+            if not books:
+                break
+            
+            for book in books:
+                try:
+                    success = index_item(book)
+                    if success:
+                        books_indexed += 1
+                    else:
+                        books_failed += 1
+                        logger.warning(f"Failed to index book id={book.get('id')}")
+                except Exception as e:
+                    books_failed += 1
+                    logger.error(f"Error indexing book id={book.get('id')}: {e}")
+            
+            offset += batch_size
+            logger.info(f"Processed {offset} books... (indexed: {books_indexed}, failed: {books_failed})")
+        
+        logger.info(f"Books indexing completed. Indexed: {books_indexed}, Failed: {books_failed}")
+        
+        # Индексация мероприятий
+        logger.info("Starting events indexing...")
+        offset = 0
+        while True:
+            events = await get_all_events(db, limit=batch_size, offset=offset)
+            if not events:
+                break
+            
+            for event in events:
+                try:
+                    success = index_item(event)
+                    if success:
+                        events_indexed += 1
+                    else:
+                        events_failed += 1
+                        logger.warning(f"Failed to index event id={event.get('id')}")
+                except Exception as e:
+                    events_failed += 1
+                    logger.error(f"Error indexing event id={event.get('id')}: {e}")
+            
+            offset += batch_size
+            logger.info(f"Processed {offset} events... (indexed: {events_indexed}, failed: {events_failed})")
+        
+        logger.info(f"Events indexing completed. Indexed: {events_indexed}, Failed: {events_failed}")
+        
+        total_indexed = books_indexed + events_indexed
+        total_failed = books_failed + events_failed
+        
+        success = total_failed == 0
+        
+        return ReindexResponse(
+            success=success,
+            books_indexed=books_indexed,
+            books_failed=books_failed,
+            events_indexed=events_indexed,
+            events_failed=events_failed,
+            total_indexed=total_indexed,
+            total_failed=total_failed,
+            message=f"Reindex completed. Indexed: {total_indexed}, Failed: {total_failed}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Critical error during reindex: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Reindex failed: {str(e)}"
+        )
+
+
+@router.get("/stats")
+async def get_index_stats():
+    """
+    Получение статистики индекса Typesense.
+    Показывает количество проиндексированных документов.
+    """
+    try:
+        from app.services.typesense_client import client, COLLECTION_NAME
+        
+        # Получаем информацию о коллекции
+        collection_info = client.collections[COLLECTION_NAME].retrieve()
+        
+        # Получаем количество документов (делаем пустой поиск)
+        search_result = client.collections[COLLECTION_NAME].documents.search({
+            'q': '*',
+            'per_page': 0  # Не возвращаем результаты, только счетчик
+        })
+        
+        return {
+            "collection_name": COLLECTION_NAME,
+            "total_documents": search_result.get('found', 0),
+            "collection_info": {
+                "name": collection_info.get('name'),
+                "num_documents": collection_info.get('num_documents', 0),
+                "created_at": collection_info.get('created_at')
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting index stats: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get index stats: {str(e)}"
         )
 
 
