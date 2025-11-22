@@ -31,7 +31,7 @@ COLLECTION_SCHEMA = {
     'fields': [
         # Общие поля
         {'name': 'item_type', 'type': 'string', 'facet': True},  # 'book' или 'event'
-        {'name': 'id', 'type': 'string'},  # ID элемента (Integer в БД, но строка в Typesense)
+        # Поле 'id' создается автоматически Typesense, не нужно определять вручную
         {'name': 'title', 'type': 'string', 'locale': 'ru', 'infix': True},
         {'name': 'description', 'type': 'string', 'optional': True, 'locale': 'ru'},
         {'name': 'category', 'type': 'string', 'optional': True, 'facet': True},
@@ -45,8 +45,7 @@ COLLECTION_SCHEMA = {
         # Поля для мероприятий
         {'name': 'date', 'type': 'int64', 'optional': True},  # Unix timestamp
         {'name': 'participants_count', 'type': 'int32', 'optional': True},
-    ],
-    'default_sorting_field': 'date'  # Для мероприятий по дате, для книг можно использовать id
+    ]
 }
 
 

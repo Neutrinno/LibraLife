@@ -45,9 +45,46 @@ services:
     networks:
       - app-network
 
+  typesense:
+    image: typesense/typesense:0.25.1
+    container_name: libralife-typesense
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense_data:/data
+    command: '--data-dir /data --api-key=your-api-key-here --enable-cors'
+    networks:
+      - app-network
+
+  search-service:
+    build:
+      context: ./search_service
+    container_name: libralife-search-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - database
+      - typesense
+    environment:
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_PROTOCOL=http
+      - TYPESENSE_API_KEY=your-api-key-here
+      - SERVICE_PORT=8082
+      - LOG_LEVEL=INFO
+      - ALLOWED_ORIGINS=*
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
 
 volumes:
   postgres_main_data:
+  typesense_data:
