@@ -3,6 +3,7 @@ from sqlalchemy import select, update, delete, and_, or_
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from typing import Optional, List
+import uuid
 
 from app.models import Event
 from app.events.schemas import EventCreate, EventUpdate
@@ -14,7 +15,7 @@ class EventCRUD:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_event_by_id(self, event_id: int) -> Optional[Event]:
+    async def get_event_by_id(self, event_id: uuid.UUID) -> Optional[Event]:
         result = await self.db.execute(select(Event).where(Event.id == event_id))
         return result.scalar_one_or_none()
 
@@ -76,7 +77,7 @@ class EventCRUD:
         await self.db.refresh(event)
         return event
 
-    async def update_event(self, event_id: int, event_data: EventUpdate) -> Optional[Event]:
+    async def update_event(self, event_id: uuid.UUID, event_data: EventUpdate) -> Optional[Event]:
         update_data = event_data.model_dump(exclude_unset=True)
 
         if update_data:
@@ -94,7 +95,7 @@ class EventCRUD:
             return event
         return None
 
-    async def delete_event(self, event_id: int) -> bool:
+    async def delete_event(self, event_id: uuid.UUID) -> bool:
         event = await self.get_event_by_id(event_id)
         if not event:
             return False
@@ -103,7 +104,7 @@ class EventCRUD:
         await self.db.commit()
         return True
 
-    async def increment_participants(self, event_id: int) -> Optional[Event]:
+    async def increment_participants(self, event_id: uuid.UUID) -> Optional[Event]:
         event = await self.get_event_by_id(event_id)
         if not event:
             return None
@@ -122,7 +123,7 @@ class EventCRUD:
             await self.db.refresh(updated_event)
         return updated_event
 
-    async def decrement_participants(self, event_id: int) -> Optional[Event]:
+    async def decrement_participants(self, event_id: uuid.UUID) -> Optional[Event]:
         event = await self.get_event_by_id(event_id)
         if not event:
             return None

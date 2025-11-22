@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.v1 import validator
 from datetime import datetime, timezone
 from typing import Optional, Union
+import uuid
 
 
 class EventBase(BaseModel):
@@ -48,7 +49,7 @@ class EventUpdate(BaseModel):
 
 
 class EventResponse(EventBase):
-    id: int
+    id: uuid.UUID
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import Optional
+import uuid
 
 from app.database import get_db
 from app.models import Event
@@ -51,7 +52,7 @@ async def get_events(
 
 @event_router.get("/{event_id}", response_model=EventResponse)
 async def get_event(
-        event_id: int,
+        event_id: uuid.UUID,
         db: AsyncSession = Depends(get_db)
 ):
     """
@@ -115,7 +116,7 @@ async def get_events_by_date_range(
 
 @event_router.put("/{event_id}", response_model=EventResponse)
 async def update_event(
-        event_id: int,
+        event_id: uuid.UUID,
         event_data: EventUpdate,
         db: AsyncSession = Depends(get_db)
 ):
@@ -144,7 +145,7 @@ async def update_event(
 
 @event_router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(
-        event_id: int,
+        event_id: uuid.UUID,
         db: AsyncSession = Depends(get_db)
 ):
     """
@@ -170,7 +171,7 @@ async def delete_event(
 
 @event_router.patch("/{event_id}/increment-participants", response_model=EventResponse)
 async def increment_participants(
-        event_id: int,
+        event_id: uuid.UUID,
         db: AsyncSession = Depends(get_db)
 ):
     """
@@ -190,7 +191,7 @@ async def increment_participants(
 
 @event_router.patch("/{event_id}/decrement-participants", response_model=EventResponse)
 async def decrement_participants(
-        event_id: int,
+        event_id: uuid.UUID,
         db: AsyncSession = Depends(get_db)
 ):
     """
