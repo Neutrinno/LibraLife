@@ -1,17 +1,15 @@
 from app.models.schemas import (
     PreprocessRequest,
     PreprocessResponse,
-    IndexRequest,
-    IndexResponse,
     SearchResponse,
-    ServiceSchema
+    BookSchema,
+    EventSchema
 )
 
 __all__ = [
     "PreprocessRequest",
     "PreprocessResponse",
-    "IndexRequest",
-    "IndexResponse",
     "SearchResponse",
-    "ServiceSchema"
+    "BookSchema",
+    "EventSchema"
 ]

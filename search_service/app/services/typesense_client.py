@@ -23,24 +23,30 @@ client = Client({
     'connection_timeout_seconds': 2
 })
 
-COLLECTION_NAME = 'services'
+COLLECTION_NAME = 'libralife_items'
 
-# Обновленная схема, соответствующая базе данных [1]
+# Объединенная схема для книг и мероприятий
 COLLECTION_SCHEMA = {
     'name': COLLECTION_NAME,
     'fields': [
+        # Общие поля
+        {'name': 'item_type', 'type': 'string', 'facet': True},  # 'book' или 'event'
+        {'name': 'id', 'type': 'string'},  # ID элемента (Integer в БД, но строка в Typesense)
         {'name': 'title', 'type': 'string', 'locale': 'ru', 'infix': True},
         {'name': 'description', 'type': 'string', 'optional': True, 'locale': 'ru'},
-        {'name': 'category', 'type': 'string', 'facet': True},
+        {'name': 'category', 'type': 'string', 'optional': True, 'facet': True},
         {'name': 'location', 'type': 'string', 'optional': True, 'facet': True},
-        {'name': 'capacity', 'type': 'string', 'optional': True},
-        {'name': 'technical_specs', 'type': 'string', 'optional': True, 'locale': 'ru'},
-        {'name': 'supplier_id', 'type': 'string', 'facet': True},
-        {'name': 'supplier_name', 'type': 'string', 'optional': True, 'locale': 'ru', 'infix': True},
-        {'name': 'price_per_day', 'type': 'float', 'optional': True},
-        {'name': 'created_at', 'type': 'int64'},
+        
+        # Поля для книг
+        {'name': 'author', 'type': 'string', 'optional': True, 'locale': 'ru', 'infix': True},
+        {'name': 'gost_title', 'type': 'string', 'optional': True, 'locale': 'ru'},
+        {'name': 'is_available', 'type': 'bool', 'optional': True},
+        
+        # Поля для мероприятий
+        {'name': 'date', 'type': 'int64', 'optional': True},  # Unix timestamp
+        {'name': 'participants_count', 'type': 'int32', 'optional': True},
     ],
-    'default_sorting_field': 'created_at'
+    'default_sorting_field': 'date'  # Для мероприятий по дате, для книг можно использовать id
 }
 
 
@@ -101,7 +107,10 @@ async def sync_synonyms_with_typesense(session: AsyncSession):
             # }
 
             logger.debug(f"Upserting synonym: {synonym_id} -> {synonym_data}")
-            client.collections[COLLECTION_NAME].synonyms.upsert(synonym_id, synonym_data)
+            try:
+                client.collections[COLLECTION_NAME].synonyms.upsert(synonym_id, synonym_data)
+            except Exception as e:
+                logger.warning(f"Could not upsert synonym {synonym_id}: {e}")
 
         logger.info("✅ Successfully synchronized synonyms with Typesense.")
 
@@ -109,95 +118,129 @@ async def sync_synonyms_with_typesense(session: AsyncSession):
         logger.error(f"❌ Failed to synchronize synonyms with Typesense: {e}", exc_info=True)
 
 
-# app/services/typesense_client.py
-# ... (импорты и другие функции) ...
-
-def index_service(service_data: dict) -> bool:
-    """Индексация услуги в Typesense"""
+def index_item(item_data: dict) -> bool:
+    """
+    Индексация книги или мероприятия в Typesense.
+    item_data должен содержать поле 'item_type': 'book' или 'event'
+    """
     try:
-        # Преобразуем дату в Unix timestamp
-        created_at_ts = 0
-        if service_data.get('created_at'):
-            from dateutil import parser
-            created_at_ts = int(parser.isoparse(service_data['created_at']).timestamp())
+        item_type = item_data.get('item_type')
+        if item_type not in ['book', 'event']:
+            logger.error(f"Invalid item_type: {item_type}. Must be 'book' or 'event'")
+            return False
 
+        # Формируем базовый документ
         document = {
-            'id': str(service_data['id']),
-            'title': service_data.get('title', ''),
-            'description': service_data.get('description', ''),
-            'category': service_data.get('category', ''),
-            'location': service_data.get('location', ''),
-            'capacity': service_data.get('capacity', ''),
-            'technical_specs': service_data.get('technical_specs', ''),
-            'supplier_id': str(service_data.get('supplier_id', '')),
-            'supplier_name': service_data.get('supplier_name', ''),
-            'price_per_day': float(service_data.get('price_per_day', 0.0)) if service_data.get(
-                'price_per_day') else 0.0,
-            'created_at': created_at_ts
+            'id': f"{item_type}_{item_data['id']}",  # Уникальный ID: book_1, event_5
+            'item_type': item_type,
+            'title': item_data.get('title', ''),
+            'description': item_data.get('description') or '',
+            'category': item_data.get('category') or '',
+            'location': item_data.get('location') or '',
         }
 
-        # --- ДОБАВЬТЕ ЭТОТ ЛОГ ---
+        # Добавляем поля в зависимости от типа
+        if item_type == 'book':
+            document['author'] = item_data.get('author') or ''
+            document['gost_title'] = item_data.get('gost_title') or ''
+            document['is_available'] = item_data.get('is_available', True)
+        elif item_type == 'event':
+            # Преобразуем дату в Unix timestamp
+            date_ts = 0
+            if item_data.get('date'):
+                if isinstance(item_data['date'], str):
+                    date_ts = int(parser.isoparse(item_data['date']).timestamp())
+                else:
+                    # Если уже datetime объект
+                    date_ts = int(item_data['date'].timestamp())
+            document['date'] = date_ts
+            document['participants_count'] = item_data.get('participants_count', 0)
+
         import json
-        logger.info(f"--- DEBUG: Preparing to index document ---")
-        logger.info(json.dumps(document, indent=2, ensure_ascii=False))
-        logger.info(f"----------------------------------------")
+        logger.debug(f"Preparing to index {item_type}: {json.dumps(document, indent=2, ensure_ascii=False)}")
 
         client.collections[COLLECTION_NAME].documents.upsert(document)
-        logger.info(f"Document {document['id']} indexed successfully.")
+        logger.info(f"{item_type.capitalize()} {document['id']} indexed successfully.")
         return True
 
     except Exception as e:
-        logger.error(f"Error indexing service: {e}", exc_info=True)
+        logger.error(f"Error indexing item: {e}", exc_info=True)
         return False
 
 
-def delete_service(service_id: int) -> bool:
-    """Удаление услуги из индекса"""
+def delete_item(item_type: str, item_id: int) -> bool:
+    """Удаление книги или мероприятия из индекса"""
     try:
-        client.collections[COLLECTION_NAME].documents[str(service_id)].delete()
-        logger.info(f"Document {service_id} deleted from index")
+        document_id = f"{item_type}_{item_id}"
+        client.collections[COLLECTION_NAME].documents[document_id].delete()
+        logger.info(f"Document {document_id} deleted from index")
         return True
     except Exception as e:
-        logger.error(f"Error deleting service: {e}")
+        logger.error(f"Error deleting item: {e}")
         return False
 
 
-def search_services(
+def search_items(
         query: str,
         page: int = 1,
         per_page: int = 20,
-        filters: Optional[Dict] = None
+        filters: Optional[Dict] = None,
+        item_type: Optional[str] = None  # 'book', 'event' или None (все)
 ):
+    """
+    Поиск книг и/или мероприятий в Typesense.
+    
+    Args:
+        query: Поисковый запрос
+        page: Номер страницы
+        per_page: Количество результатов на странице
+        filters: Дополнительные фильтры (category, location)
+        item_type: Фильтр по типу ('book', 'event' или None для всех)
+    """
     try:
+        # Базовые поля для поиска (общие для книг и мероприятий)
         search_params = {
             'q': query,
-            'query_by': 'title,supplier_name,description,technical_specs',
+            'query_by': 'title,author,description,gost_title',  # author и gost_title только для книг, но это ок
             'query_by_weights': '4,3,2,1',
             'prefix': 'true',
             'num_typos': 2,
             'per_page': per_page,
             'page': page,
-            'sort_by': '_text_match:desc,created_at:desc'
-            # Фильтр по 'active' теперь не нужен, т.к. мы индексируем только активные услуги
+            'sort_by': '_text_match:desc,date:desc'  # Сначала релевантность, потом дата (для мероприятий)
         }
-        # Построение фильтров из словаря
+
+        # Построение фильтров
+        filter_strings = []
+        
+        # Фильтр по типу элемента
+        if item_type and item_type in ['book', 'event']:
+            filter_strings.append(f"item_type:={item_type}")
+        
+        # Дополнительные фильтры
         if filters:
-            filter_strings = []
             if filters.get('category'):
                 filter_strings.append(f"category:={filters['category']}")
             if filters.get('location'):
                 filter_strings.append(f"location:='{filters['location']}'")
-            # ... можно добавить другие фильтры ...
+            if filters.get('is_available') is not None and item_type == 'book':
+                filter_strings.append(f"is_available:={str(filters['is_available']).lower()}")
 
-            if filter_strings:
-                search_params['filter_by'] = ' && '.join(filter_strings)
+        if filter_strings:
+            search_params['filter_by'] = ' && '.join(filter_strings)
 
         results = client.collections[COLLECTION_NAME].documents.search(search_params)
         return {
-            'hits': results['hits'],  # Возвращаем полный hit, а не только document
+            'hits': results['hits'],  # Возвращаем полный hit с document и score
             'found': results['found'],
             'page': results['page']
         }
     except Exception as e:
-        logger.error(f"Error searching: {e}", exc_info=True)
+        logger.error(f"Error searching items: {e}", exc_info=True)
         return {'hits': [], 'found': 0, 'page': 1}
+
+
+# Оставляем старую функцию для обратной совместимости (если где-то используется)
+def search_services(query: str, page: int = 1, per_page: int = 20, filters: Optional[Dict] = None):
+    """Старая функция для обратной совместимости. Использует search_items."""
+    return search_items(query, page, per_page, filters)

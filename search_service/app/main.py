@@ -65,8 +65,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Power Market Search Service",
-    description="Сервис индексации и поиска для PowerMarket",
+    title="LibraLife Search Service",
+    description="Сервис индексации и поиска книг и мероприятий для LibraLife",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -92,4 +92,4 @@ def health_check():
 @app.get("/", tags=["Root"])
 def root():
     """Корневой endpoint с информацией о API"""
-    return {"message": "Welcome to PowerMarket Search API", "docs": "/docs"}
+    return {"message": "Welcome to LibraLife Search API", "docs": "/docs"}
