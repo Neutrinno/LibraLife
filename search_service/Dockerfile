@@ -1,12 +1,17 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# PYTHONPATH указывает на /app, где окажется ваша папка app/
+ENV PYTHONPATH=/app
 
-COPY .env .
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY ./app ./app
+# Копируем контекст (в compose context=search_service) прямо в /app
+COPY . /app
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]
+EXPOSE 8082
+
+# По-умолчанию запускаем uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8082"]
