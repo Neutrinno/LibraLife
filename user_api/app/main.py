@@ -36,25 +36,6 @@ app = FastAPI(title='LibraLife')
 #     allow_headers=["*"],
 # )
 
-# --- Auth: login / logout ---
-app.include_router(
-    fastapi_users.get_auth_router(auth_backend),
-    prefix=settings.auth.prefix,
-    tags=[settings.auth.tags],
-)
-
-# --- Registration ---
-app.include_router(
-    fastapi_users.get_register_router(UserReadExtended, UserCreateExtended),
-    prefix=settings.auth.prefix,
-    tags=[settings.auth.tags],
-)
+app.
 
 
-# --- Protected route ---
-current_user = fastapi_users.current_user()
-
-
-@app.get("/protected-route")
-def protected_route(user: User = Depends(current_user)):
-    return {"email": user.email, "full_name": user.full_name}
