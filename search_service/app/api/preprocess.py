@@ -2,12 +2,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
-from app.database.connection import get_db
-from app.database.queries import get_service_by_id_query
+from app.api.dependencies import get_db_dependency
+from app.database.queries import get_service_by_id
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 import traceback
-
-from app.database.queries import get_service_by_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -22,29 +21,16 @@ class IndexResponse(BaseModel):
     message: str
 
 
-def get_db_dependency():
-    """Dependency для FastAPI"""
-    try:
-        with get_db() as conn:
-            yield conn
-    except Exception as e:
-        logger.error(f"Database connection error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database connection error: {str(e)}"
-        )
-
-
 @router.post("/index", response_model=IndexResponse)
-def index_service_endpoint(
+async def index_service_endpoint(
         request: IndexRequest,
-        db=Depends(get_db_dependency)
+        db: AsyncSession = Depends(get_db_dependency)
 ):
     """Индексация услуги в Typesense по UUID"""
     logger.info(f"=== Index request for service_id={request.id} ===")
 
     try:
-        service_dict = get_service_by_id(db, request.id)
+        service_dict = await get_service_by_id(db, request.id)
 
         if not service_dict:
             raise HTTPException(
@@ -103,11 +89,11 @@ def delete_service_endpoint(service_id: int):
 
 
 @router.get("/health")
-def services_health():
+async def services_health():
     """Проверка работоспособности"""
     from app.database.connection import check_db_connection
     
-    db_ok = check_db_connection()
+    db_ok = await check_db_connection()
     
     return {
         "status": "healthy" if db_ok else "unhealthy",

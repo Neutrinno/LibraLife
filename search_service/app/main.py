@@ -9,7 +9,7 @@ import logging
 from app.config import (
     DB_HOST, DB_PORT, TYPESENSE_HOST, LOG_LEVEL, ALLOWED_ORIGINS
 )
-from app.database.connection import init_db_pool, close_db_pool, check_db_connection
+from app.database.connection import check_db_connection
 
 # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
 # Импортируем api_router из пакета app.api (из его __init__.py)
@@ -40,17 +40,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Typesense Host: {TYPESENSE_HOST}")
 
     try:
-        init_db_pool()
-        if not check_db_connection():
+        if not await check_db_connection():
             raise Exception("Database connection health check failed on startup.")
-        logger.info("✅ Database pool initialized and connection confirmed.")
+        logger.info("✅ Database connection confirmed.")
 
         # Инициализируем коллекцию в Typesense
         init_collection()
 
         try:
-            with get_db() as conn:
-                sync_synonyms_with_typesense(conn)
+            async for session in get_db():
+                await sync_synonyms_with_typesense(session)
+                break
         except Exception as e:
             logger.error(f"Could not run synonym synchronization during startup: {e}")
 
@@ -62,8 +62,6 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("--- Application Shutting Down ---")
-    close_db_pool()
-    logger.info("Database pool closed.")
 
 
 app = FastAPI(

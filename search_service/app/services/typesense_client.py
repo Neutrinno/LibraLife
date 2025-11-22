@@ -7,6 +7,7 @@ import logging
 from typing import Dict, Optional
 
 from app.database.queries import get_all_synonyms
+from sqlalchemy.ext.asyncio import AsyncSession
 from typesense.exceptions import ObjectNotFound
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ def init_collection():
             raise create_error
 
 
-def sync_synonyms_with_typesense(db_connection):
+async def sync_synonyms_with_typesense(session: AsyncSession):
     """
     Читает все синонимы из PostgreSQL и загружает их в Typesense.
     Эта операция перезаписывает существующие синонимы в Typesense.
@@ -72,7 +73,7 @@ def sync_synonyms_with_typesense(db_connection):
     logger.info("Starting synonym synchronization with Typesense...")
     try:
         # 1. Получаем все синонимы из базы данных
-        synonym_tuples = get_all_synonyms(db_connection)
+        synonym_tuples = await get_all_synonyms(session)
         if not synonym_tuples:
             logger.info("No synonyms found in the database. Skipping sync.")
             return

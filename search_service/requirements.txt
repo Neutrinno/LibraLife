@@ -3,7 +3,8 @@ fastapi==0.104.1
 uvicorn==0.24.0
 
 # Database
-psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
+asyncpg==0.29.0
 
 # Search Engine
 typesense==0.16.0

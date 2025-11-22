@@ -1,31 +1,24 @@
 """
 Зависимости для dependency injection
 """
-"""
-Зависимости для dependency injection
-"""
-from typing import Generator
-from app.database.connection import get_db_connection, return_db_connection
+from typing import AsyncGenerator
+from app.database.connection import get_db
 from fastapi import HTTPException
 import logging
 
 logger = logging.getLogger(__name__)
 
-def get_db() -> Generator:
+async def get_db_dependency() -> AsyncGenerator:
     """
-    Dependency для получения соединения с БД.
-    Автоматически закрывает соединение после использования.
+    Dependency для получения сессии с БД.
+    Автоматически закрывает сессию после использования.
     """
-    conn = None
-    try:
-        conn = get_db_connection()
-        yield conn
-    except Exception as e:
-        logger.error(f"Database connection error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database connection error: {str(e)}"
-        )
-    finally:
-        if conn:
-            return_db_connection(conn)
+    async for session in get_db():
+        try:
+            yield session
+        except Exception as e:
+            logger.error(f"Database session error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database session error: {str(e)}"
+            )
