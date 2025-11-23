@@ -78,12 +78,15 @@ async def add_synonym_query(session: AsyncSession, word: str, synonym: str) -> b
 
 
 # ============= BOOKS =============
-async def get_book_by_id(session: AsyncSession, book_id: int) -> Optional[Dict[str, Any]]:
+async def get_book_by_id(session: AsyncSession, book_id: str) -> Optional[Dict[str, Any]]:
     """Получение книги по ID для индексации."""
     try:
+        # Конвертируем в int для поиска
+        book_id_int = int(book_id)
+
         result = await session.execute(
             text("""
-                SELECT 
+                SELECT
                     id,
                     author,
                     title,
@@ -91,16 +94,16 @@ async def get_book_by_id(session: AsyncSession, book_id: int) -> Optional[Dict[s
                     gost_title,
                     description,
                     is_available
-                FROM books 
+                FROM books
                 WHERE id = :book_id
             """),
-            {"book_id": book_id}
+            {"book_id": book_id_int}
         )
         row = result.fetchone()
 
         if row:
             book_dict = {
-                'id': row[0],
+                'id': str(row[0]),  # Всегда возвращаем как строку
                 'author': row[1],
                 'title': row[2],
                 'category': row[3],
@@ -113,6 +116,10 @@ async def get_book_by_id(session: AsyncSession, book_id: int) -> Optional[Dict[s
 
         return None
 
+    except ValueError:
+        # Если не удалось конвертировать в int, возвращаем None
+        logger.error(f"Invalid book_id format: {book_id}")
+        return None
     except Exception as e:
         logger.error(f"Error fetching book {book_id}: {e}", exc_info=True)
         return None
@@ -176,28 +183,31 @@ async def get_all_books(session: AsyncSession, limit: int = 1000, offset: int = 
 
 
 # ============= EVENTS =============
-async def get_event_by_id(session: AsyncSession, event_id: int) -> Optional[Dict[str, Any]]:
+async def get_event_by_id(session: AsyncSession, event_id: str) -> Optional[Dict[str, Any]]:
     """Получение мероприятия по ID для индексации."""
     try:
+        # Конвертируем в int для поиска
+        event_id_int = int(event_id)
+
         result = await session.execute(
             text("""
-                SELECT 
+                SELECT
                     id,
                     title,
                     description,
                     date,
                     location,
                     participants_count
-                FROM events 
+                FROM events
                 WHERE id = :event_id
             """),
-            {"event_id": event_id}
+            {"event_id": event_id_int}
         )
         row = result.fetchone()
 
         if row:
             event_dict = {
-                'id': row[0],
+                'id': str(row[0]),  # Всегда возвращаем как строку
                 'title': row[1],
                 'description': row[2],
                 'date': row[3],
@@ -212,6 +222,10 @@ async def get_event_by_id(session: AsyncSession, event_id: int) -> Optional[Dict
 
         return None
 
+    except ValueError:
+        # Если не удалось конвертировать в int, возвращаем None
+        logger.error(f"Invalid event_id format: {event_id}")
+        return None
     except Exception as e:
         logger.error(f"Error fetching event {event_id}: {e}", exc_info=True)
         return None

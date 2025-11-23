@@ -307,53 +307,87 @@ def find_similar_items(item_data: Dict[str, Any], limit: int = 10) -> List[Dict[
         Список похожих элементов
     """
     try:
+        def _sanitize_filter_value(value: str) -> str:
+            """Escapes single quotes for Typesense filter values."""
+            return value.replace("'", "\\'")
+
         item_type = item_data.get('item_type')
         if item_type not in ['book', 'event']:
             logger.error(f"Invalid item_type: {item_type}. Must be 'book' or 'event'")
             return []
 
+        # Получаем ID текущего элемента для исключения
+        current_id = str(item_data.get('id', ''))
+        exclude_id = f"{item_type}_{current_id}"
+
         # Формируем поисковый запрос на основе данных элемента
         query_parts = []
 
+        category = ''
         if item_type == 'book':
-            # Для книг: ищем по title + author + category
+            # Для книг: используем ключевые слова из title, author и category
             title = item_data.get('title', '').strip()
             author = item_data.get('author', '').strip()
             category = item_data.get('category', '').strip()
 
+            # Берем первые несколько слов из названия (до 3-4 слов)
             if title:
-                query_parts.append(title)
+                title_words = title.split()[:4]  # Берем первые 4 слова
+                query_parts.extend(title_words)
+            
+            # Добавляем автора целиком
             if author:
                 query_parts.append(author)
+            
+            # Добавляем категорию
             if category:
                 query_parts.append(category)
 
         elif item_type == 'event':
-            # Для мероприятий: ищем по title + description + location
+            # Для мероприятий: используем ключевые слова из title, description и location
             title = item_data.get('title', '').strip()
             description = item_data.get('description', '').strip()
             location = item_data.get('location', '').strip()
 
+            # Берем первые несколько слов из названия
             if title:
-                query_parts.append(title)
+                title_words = title.split()[:4]
+                query_parts.extend(title_words)
+            
+            # Берем первые несколько слов из описания
             if description:
-                query_parts.append(description)
+                desc_words = description.split()[:5]
+                query_parts.extend(desc_words)
+            
+            # Добавляем локацию
             if location:
                 query_parts.append(location)
 
         # Если нет данных для поиска, возвращаем пустой результат
         if not query_parts:
+            logger.warning(f"No search terms found for {item_type} id={current_id}")
             return []
 
         # Объединяем части запроса
         query = ' '.join(query_parts)
+        logger.info(f"Searching similar {item_type}s with query: '{query}', excluding: {exclude_id}")
 
         # Параметры поиска
+        query_fields = ['title', 'author', 'description', 'gost_title']
+        query_weights = ['4', '3', '2', '1']
+
+        if item_type == 'book':
+            query_fields.append('category')
+            query_weights.append('2')
+        elif item_type == 'event':
+            query_fields.append('location')
+            query_weights.append('1')
+
         search_params = {
             'q': query,
             'per_page': limit + 1,  # +1 чтобы учесть текущий элемент
-            'query_by': 'title,author,description,gost_title',
-            'query_by_weights': '4,3,2,1',
+            'query_by': ','.join(query_fields),
+            'query_by_weights': ','.join(query_weights),
             'prefix': 'true',
             'num_typos': 2,
             'sort_by': '_text_match:desc'
@@ -361,11 +395,6 @@ def find_similar_items(item_data: Dict[str, Any], limit: int = 10) -> List[Dict[
 
         # Построение фильтров
         filter_strings = []
-
-        # Исключаем текущий элемент
-        current_id = item_data.get('id')
-        if current_id:
-            filter_strings.append(f"id:!={item_type}_{current_id}")
 
         # Фильтр по типу
         filter_strings.append(f"item_type:={item_type}")
@@ -377,18 +406,46 @@ def find_similar_items(item_data: Dict[str, Any], limit: int = 10) -> List[Dict[
 
         # Для книг: только доступные
         if item_type == 'book':
-            filter_strings.append("is_available:=true")
+            availability = item_data.get('is_available')
+            if availability is not None:
+                filter_strings.append(f"is_available:={str(availability).lower()}")
+            if category:
+                filter_strings.append(f"category:='{_sanitize_filter_value(category)}'")
 
         if filter_strings:
             search_params['filter_by'] = ' && '.join(filter_strings)
 
-        results = client.collections[COLLECTION_NAME].documents.search(search_params)
+        logger.debug(f"Search params: {search_params}")
 
-        # Возвращаем только документы (без метаданных поиска)
-        similar_items = []
-        for hit in results.get('hits', []):
-            similar_items.append(hit['document'])
+        # Запрашиваем больше результатов, чтобы учесть исключение текущего элемента
+        search_params['per_page'] = limit + 10  # Берем больше, чтобы после исключения осталось достаточно
 
+        def execute_similarity_search(params: Dict[str, Any]) -> List[Dict[str, Any]]:
+            """Выполняет поиск и исключает текущий элемент."""
+            local_results = client.collections[COLLECTION_NAME].documents.search(params)
+            filtered_results: List[Dict[str, Any]] = []
+            for hit in local_results.get('hits', []):
+                doc = hit.get('document', {})
+                if doc.get('id') == exclude_id:
+                    continue
+                filtered_results.append(doc)
+                if len(filtered_results) >= limit:
+                    break
+            return filtered_results
+
+        similar_items = execute_similarity_search(search_params)
+
+        # Если ничего не нашли, пробуем fallback по категории
+        if not similar_items and item_type == 'book' and category:
+            logger.info(f"No direct matches for book id={current_id}, fallback to category search '{category}'")
+            fallback_params = search_params.copy()
+            fallback_params['q'] = category
+            fallback_params['query_by'] = 'category'
+            fallback_params['query_by_weights'] = '1'
+            fallback_params['prefix'] = 'false'
+            similar_items = execute_similarity_search(fallback_params)
+
+        logger.info(f"Found {len(similar_items)} similar {item_type}s for id={current_id}")
         return similar_items
 
     except Exception as e:
