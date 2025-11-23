@@ -1,10 +1,13 @@
 """
 Endpoint для поиска книг и мероприятий через Typesense
 """
-from fastapi import APIRouter, Query, status, HTTPException
+from fastapi import APIRouter, Query, status, HTTPException, Depends
 from typing import Optional
 from app.models.schemas import SearchResponse
-from app.services.typesense_client import search_items
+from app.services.typesense_client import search_items, find_similar_items
+from app.database.queries import get_book_by_id, get_event_by_id
+from app.api.dependencies import get_db_dependency
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.preprocessor import preprocess_text
 import logging
 
@@ -108,3 +111,86 @@ async def suggest(
     except Exception as e:
         logger.error(f"Suggest error: {e}", exc_info=True)
         return {"query": q, "suggestions": []}
+
+
+@router.get("/books/{book_id}/similar")
+async def get_similar_books(
+    book_id: str,
+    limit: int = Query(10, ge=1, le=50, description="Количество похожих книг"),
+    db: AsyncSession = Depends(get_db_dependency)
+):
+    """
+    Получение похожих книг на основе текущей книги.
+    Похожесть определяется по названию, автору и категории через Typesense.
+    """
+    try:
+        # Получаем данные книги из БД
+        book_data = await get_book_by_id(db, book_id)
+
+        if not book_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Book not found"
+            )
+
+        # Ищем похожие книги через Typesense
+        similar_items = find_similar_items(book_data, limit=limit)
+
+        logger.info(f"Similar books for book {book_id}: found {len(similar_items)} items")
+
+        return {
+            "current_book": book_data,
+            "similar_books": similar_items,
+            "total": len(similar_items)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting similar books for {book_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error getting similar books"
+        )
+
+
+@router.get("/events/{event_id}/similar")
+async def get_similar_events(
+    event_id: str,
+    limit: int = Query(10, ge=1, le=50, description="Количество похожих мероприятий"),
+    db: AsyncSession = Depends(get_db_dependency)
+):
+    """
+    Получение похожих мероприятий на основе текущего мероприятия.
+    Похожесть определяется по названию, описанию и локации через Typesense.
+    Возвращает только будущие мероприятия.
+    """
+    try:
+        # Получаем данные мероприятия из БД
+        event_data = await get_event_by_id(db, event_id)
+
+        if not event_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
+
+        # Ищем похожие мероприятия через Typesense
+        similar_items = find_similar_items(event_data, limit=limit)
+
+        logger.info(f"Similar events for event {event_id}: found {len(similar_items)} items")
+
+        return {
+            "current_event": event_data,
+            "similar_events": similar_items,
+            "total": len(similar_items)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting similar events for {event_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error getting similar events"
+        )

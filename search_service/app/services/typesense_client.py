@@ -1,10 +1,11 @@
 from collections import defaultdict
+from datetime import datetime
 
 from dateutil import parser
 from typesense import Client
 from app.config import TYPESENSE_HOST, TYPESENSE_PORT, TYPESENSE_PROTOCOL, TYPESENSE_API_KEY
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any
 
 from app.database.queries import get_all_synonyms
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -292,6 +293,107 @@ def search_items(
     except Exception as e:
         logger.error(f"Error searching items: {e}", exc_info=True)
         return {'hits': [], 'found': 0, 'page': 1}
+
+
+def find_similar_items(item_data: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Поиск похожих элементов (книг или мероприятий) на основе данных текущего элемента.
+
+    Args:
+        item_data: Данные текущего элемента (книга или мероприятие)
+        limit: Максимальное количество похожих элементов
+
+    Returns:
+        Список похожих элементов
+    """
+    try:
+        item_type = item_data.get('item_type')
+        if item_type not in ['book', 'event']:
+            logger.error(f"Invalid item_type: {item_type}. Must be 'book' or 'event'")
+            return []
+
+        # Формируем поисковый запрос на основе данных элемента
+        query_parts = []
+
+        if item_type == 'book':
+            # Для книг: ищем по title + author + category
+            title = item_data.get('title', '').strip()
+            author = item_data.get('author', '').strip()
+            category = item_data.get('category', '').strip()
+
+            if title:
+                query_parts.append(title)
+            if author:
+                query_parts.append(author)
+            if category:
+                query_parts.append(category)
+
+        elif item_type == 'event':
+            # Для мероприятий: ищем по title + description + location
+            title = item_data.get('title', '').strip()
+            description = item_data.get('description', '').strip()
+            location = item_data.get('location', '').strip()
+
+            if title:
+                query_parts.append(title)
+            if description:
+                query_parts.append(description)
+            if location:
+                query_parts.append(location)
+
+        # Если нет данных для поиска, возвращаем пустой результат
+        if not query_parts:
+            return []
+
+        # Объединяем части запроса
+        query = ' '.join(query_parts)
+
+        # Параметры поиска
+        search_params = {
+            'q': query,
+            'per_page': limit + 1,  # +1 чтобы учесть текущий элемент
+            'query_by': 'title,author,description,gost_title',
+            'query_by_weights': '4,3,2,1',
+            'prefix': 'true',
+            'num_typos': 2,
+            'sort_by': '_text_match:desc'
+        }
+
+        # Построение фильтров
+        filter_strings = []
+
+        # Исключаем текущий элемент
+        current_id = item_data.get('id')
+        if current_id:
+            filter_strings.append(f"id:!={item_type}_{current_id}")
+
+        # Фильтр по типу
+        filter_strings.append(f"item_type:={item_type}")
+
+        # Для мероприятий: только будущие события
+        if item_type == 'event':
+            current_timestamp = int(datetime.now().timestamp())
+            filter_strings.append(f"date:>={current_timestamp}")
+
+        # Для книг: только доступные
+        if item_type == 'book':
+            filter_strings.append("is_available:=true")
+
+        if filter_strings:
+            search_params['filter_by'] = ' && '.join(filter_strings)
+
+        results = client.collections[COLLECTION_NAME].documents.search(search_params)
+
+        # Возвращаем только документы (без метаданных поиска)
+        similar_items = []
+        for hit in results.get('hits', []):
+            similar_items.append(hit['document'])
+
+        return similar_items
+
+    except Exception as e:
+        logger.error(f"Error finding similar items: {e}", exc_info=True)
+        return []
 
 
 # Оставляем старую функцию для обратной совместимости (если где-то используется)
