@@ -11,6 +11,7 @@ from app.users.router import user_router
 from app.events.routers import event_router
 from app.books.routers import book_router
 from app.book_rental.routers import book_rental_router
+from starlette.middleware.cors import CORSMiddleware
 
 # Настройка логирования
 logging.basicConfig(
@@ -28,14 +29,14 @@ Base = declarative_base()
 
 
 app = FastAPI(title='LibraLife')
-#
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(user_router)
 app.include_router(event_router)

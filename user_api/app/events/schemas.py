@@ -57,3 +57,16 @@ class EventResponse(EventBase):
 class EventListResponse(BaseModel):
     events: list[EventResponse]
     total: int
+
+class EventDocumentData(BaseModel):
+    event_type: str = "Мероприятие"
+    documents_info: str = "Не предоставлено"
+    content: str = "Содержание не указано"
+    organizers: str = "Не указаны"
+    librarian: str = "Не указан"
+
+class EventDocumentResponse(BaseModel):
+    message: str
+    filename: str
+    download_url: str
+

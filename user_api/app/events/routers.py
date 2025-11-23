@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import Optional
 import uuid
+import os
+
+from starlette.responses import StreamingResponse
 
 from app.database import get_db
-from app.models import Event
-from app.events.schemas import EventCreate, EventUpdate, EventResponse, EventListResponse
+from app.events.schemas import EventCreate, EventUpdate, EventResponse, EventListResponse, EventDocumentData
 from app.events.crud import EventCRUD
+from app.events.document_generator import EventDocumentGenerator
 
 # ... существующие роутеры пользователей ...
 
@@ -207,3 +210,56 @@ async def decrement_participants(
         )
 
     return event
+
+
+from fastapi import Response
+
+
+@event_router.post("/{event_id}/download-report")
+async def download_event_report(
+        event_id: uuid.UUID,
+        document_data: EventDocumentData,
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Генерация и немедленное скачивание отчета о мероприятии
+    """
+    # Получаем мероприятие из базы данных
+    crud = EventCRUD(db)
+    event = await crud.get_event_by_id(event_id)
+
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Мероприятие не найдено"
+        )
+
+    # Подготавливаем данные для документа
+    event_data = {
+        'id': event_id,
+        'date': event.date,
+        'event_type': document_data.event_type,
+        'title': event.title,
+        'location': event.location or "Не указано",
+        'participants_count': event.participants_count,
+        'documents_info': document_data.documents_info,
+        'content': document_data.content,
+        'organizers': document_data.organizers,
+        'librarian': document_data.librarian
+    }
+
+    # Генерируем документ в памяти
+    generator = EventDocumentGenerator()
+    file_stream = generator.generate_event_report(event_data)
+
+    # Читаем содержимое файла
+    file_content = file_stream.getvalue()
+
+    # Используем Response с байтовым содержимым
+    return Response(
+        content=file_content,
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers={
+            'Content-Disposition': 'attachment; filename="event_report.docx"'
+        }
+    )
